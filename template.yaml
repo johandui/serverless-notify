@@ -1,0 +1,58 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+
+Resources:
+  MySqsQueue:
+    Type: AWS::SQS::Queue
+  MyDB:
+    Type: AWS::Serverless::SimpleTable
+    Properties:
+      TableName: Notification2
+      PrimaryKey:
+        Name: id
+        Type: String
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
+
+  MySqsReceiver:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: receiver/
+      Handler: index.handler
+      Runtime: nodejs12.x
+      Events:
+        MySQSEvent:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt MySqsQueue.Arn
+            BatchSize: 10
+      Environment:
+        Variables:
+          NOTIFY_URL: "https://webhook.site/b4c60b20-ac08-440e-8d97-34cf69c6e484"
+      Policies:
+        - DynamoDBWritePolicy:
+            TableName: !Ref MyDB
+
+  MySqsSender:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: sender/
+      Handler: index.handler
+      Runtime: nodejs12.x
+      Events:
+        apiForLambda:
+          Type: Api
+          Properties:
+            Path: /
+            Method: post
+      Environment:
+        Variables:
+          QUEUE_URL: !Ref MySqsQueue
+      Policies:
+        - DynamoDBWritePolicy:
+            TableName: !Ref MyDB
+        - SQSSendMessagePolicy:
+            QueueName: !GetAtt MySqsQueue.QueueName
+
+
